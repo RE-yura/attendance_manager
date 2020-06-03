@@ -1,5 +1,6 @@
 .vscode/
 
 /__pycache__/
-/data/*
-/reception/*
+/data/
+/reception/
+model_state.pt

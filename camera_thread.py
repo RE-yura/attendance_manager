@@ -39,12 +39,15 @@ class CameraThread(QThread):
   # 受付(推論)
   @pyqtSlot()
   def reception(self):
+    self.changeLabel.emit("")
     self.datapath = self.selfpath + "/reception/"
     os.makedirs(self.datapath, exist_ok=True)
     self.name = ""
     self.count = 0
     self.takePicture()
-    name = self.fc.predict()
+    while not os.path.isfile(self.datapath + "0.jpg"):
+      QTest.qWait(10)
+    name = self.fc.predict(self.datapath + "0.jpg")
     self.changeLabel.emit(name)
 
   @pyqtSlot(int)
@@ -82,14 +85,16 @@ class CameraThread(QThread):
         continue
       gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
       faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3)
-      for (x, y, w, h) in faces:
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 200, 0), 1)
 
-      if self.boolSave:
-        face = frame[y:y+h, x:x+w]
-        path = self.datapath + self.name + str(self.count) + ".jpg"
-        self.imwrite(path, face)
-        self.boolSave = False
+      if len(faces) == 1:
+        for (x, y, w, h) in faces:
+          cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 200, 0), 1)
+
+        if self.boolSave:
+          face = frame[y:y+h, x:x+w]
+          path = self.datapath + self.name + str(self.count) + ".jpg"
+          self.imwrite(path, face)
+          self.boolSave = False
       
       rgbImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
       height, width, channels = rgbImage.shape

@@ -8,7 +8,7 @@ from torchvision import transforms
 from sklearn.model_selection import train_test_split
 from PIL import Image
 from PyQt5.QtCore import *
-import multiprocessing
+from PyQt5.QtWidgets import *
 
 def data_split(X, y):
   X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=10, random_state=1)
@@ -25,8 +25,23 @@ class ImgPathManager:
     self.y_test = np.empty(0)
 
     rootpath = "./data/"
-    names = os.listdir(rootpath)
-    self.category_num = len(names)
+    try:
+      names = os.listdir(rootpath)
+      self.category_num = len(names)
+      if self.category_num == 0:
+        raise FileNotFoundError("error!")
+    except:
+      # msg_box = QMessageBox()
+      # msg_box.setAttribute(Qt.WA_DeleteOnClose, True)
+      # msg_box.setWindowTitle("Message")
+      # msg_box.setStyleSheet("width: 400px;")
+      # msg_box.setText('顔の登録をして下さい．')
+      # msg_box.setIcon(QMessageBox.Information)
+      # restart_btn = msg_box.addButton("OK", QMessageBox.ActionRole)
+      # msg_box.setDefaultButton(restart_btn)
+      # msg_box.exec_()
+      return
+
     self.idx_to_names = {idx: name for idx, name in zip(range(self.category_num), names)}
     for idx in self.idx_to_names.keys():
       target_path = os.path.join(rootpath, self.idx_to_names[idx], "*.jpg") 
@@ -134,77 +149,95 @@ def predict(model, path, device):
   model.train()
   return predicted
 
+
+# ==============================================================
 class FaceLearner(QThread):
   changeProgress = pyqtSignal(int)
 
-  batch_size = 4
-  ipm = ImgPathManager()
-
-  train_dataset = Dataset(data=ipm.getData(phase="train"), transform=ImageTransform())
-  train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-  valid_dataset = Dataset(data=ipm.getData(phase="validation"), transform=ImageTransform())
-  valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, shuffle=True)
-
-  test_dataset = Dataset(data=ipm.getData(phase="test"), transform=ImageTransform())
-  test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
-
-  device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-  # モデルの作成と学習の実行
-  torch.manual_seed(0) # 学習結果の再現性を担保
-
-  # 入力画像のサイズ(30,30)
-  cnn = torch.nn.Sequential(
-    torch.nn.Conv2d(3, 16, (5, 5), padding=2),    # (28,28)
-    torch.nn.ReLU(),
-    torch.nn.MaxPool2d(2),                        # (14,14)
-    torch.nn.Conv2d(16, 32, (3, 3)),              # (12,12)
-    torch.nn.ReLU(),
-    torch.nn.MaxPool2d(2),                        # ( 6, 6)
-    torch.nn.Conv2d(32, 64, (3, 3)),              # ( 4, 4)
-    torch.nn.ReLU(),
-    torch.nn.MaxPool2d(2),                        # ( 2, 2)
-    torch.nn.Dropout(0.25),
-    torch.nn.Flatten(), 
-    torch.nn.Linear(64*2*2, 128),
-    torch.nn.ReLU(),
-    torch.nn.Dropout(0.25),
-    torch.nn.Linear(128, ipm.category_num),
-  )
-  cnn.to(device)
-
-  # モデルパラメータのロード
-  try:
-    cnn.load_state_dict(torch.load("./model_state.pt"))
-  except (RuntimeError, FileNotFoundError) as e:
-    # print('catch RuntimeError:', e)
-    print("モデルパラメータのロードに失敗しました．再学習を行って下さい．")
-    pass
-
   def __init__(self):
     super().__init__()
-    # 誤差関数と最適化手法を準備
-    self.loss_fn = torch.nn.CrossEntropyLoss()
-    # optimizer = torch.optim.SGD(cnn.parameters(), lr=0.01)
-    self.optimizer = torch.optim.Adagrad(self.cnn.parameters(), lr=0.01)
+    self.data_exist = True
+
+    # モデルの作成と学習の実行
+    torch.manual_seed(0) # 学習結果の再現性を担保
+
+    self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    self.loadData()
+
+    # モデルパラメータのロード
+    try:
+      self.cnn.load_state_dict(torch.load("./model_state.pt"))
+    except (RuntimeError, FileNotFoundError, AttributeError) as e:
+      # print('catch RuntimeError:', e)
+      print("モデルパラメータのロードに失敗しました．再学習を行って下さい．")
+      pass
+
+  def loadData(self):
+    batch_size = 4
+    self.ipm = ImgPathManager()
+
+    try: 
+      self.train_dataset = Dataset(data=self.ipm.getData(phase="train"), transform=ImageTransform())
+      self.train_loader = torch.utils.data.DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True)
+
+      self.valid_dataset = Dataset(data=self.ipm.getData(phase="validation"), transform=ImageTransform())
+      self.valid_loader = torch.utils.data.DataLoader(self.valid_dataset, batch_size=batch_size, shuffle=True)
+
+      self.test_dataset = Dataset(data=self.ipm.getData(phase="test"), transform=ImageTransform())
+      self.test_loader = torch.utils.data.DataLoader(self.test_dataset, batch_size=batch_size, shuffle=True)
+
+      # 入力画像のサイズ(30,30)
+      self.cnn = torch.nn.Sequential(
+        torch.nn.Conv2d(3, 16, (5, 5), padding=2),    # (28,28)
+        torch.nn.ReLU(),
+        torch.nn.MaxPool2d(2),                        # (14,14)
+        torch.nn.Conv2d(16, 32, (3, 3)),              # (12,12)
+        torch.nn.ReLU(),
+        torch.nn.MaxPool2d(2),                        # ( 6, 6)
+        torch.nn.Conv2d(32, 64, (3, 3)),              # ( 4, 4)
+        torch.nn.ReLU(),
+        torch.nn.MaxPool2d(2),                        # ( 2, 2)
+        torch.nn.Dropout(0.25),
+        torch.nn.Flatten(), 
+        torch.nn.Linear(64*2*2, 128),
+        torch.nn.ReLU(),
+        torch.nn.Dropout(0.25),
+        torch.nn.Linear(128, self.ipm.category_num),
+      )
+      self.cnn.to(self.device)
+    
+      # 誤差関数と最適化手法を準備
+      self.loss_fn = torch.nn.CrossEntropyLoss()
+      # optimizer = torch.optim.SGD(cnn.parameters(), lr=0.01)
+      self.optimizer = torch.optim.Adagrad(self.cnn.parameters(), lr=0.01)
+      self.data_exist = True
+    except ValueError as e:
+      self.data_exist = False
+      return
 
   def run(self):
-    # 学習の実行
-    trained_model = self.train(self.cnn, self.loss_fn, self.optimizer, self.train_loader, self.valid_loader, self.device, epoch=20)
+    self.loadData()
 
-    # モデルパラメータの保存
-    torch.save(trained_model.state_dict(), "./model_state.pt")
+    if self.data_exist:
+      # 学習の実行
+      trained_model = self.train(self.cnn, self.loss_fn, self.optimizer, self.train_loader, self.valid_loader, self.device, epoch=20)
+
+      # モデルパラメータの保存
+      torch.save(trained_model.state_dict(), "./model_state.pt")
 
   def test(self):
     # 予測の実行
     test_loss, test_accuracy = calculate_model(self.cnn, self.loss_fn, None, self.test_loader, self.device, mode='evaluate')
     print("テストデータの予測正解率 : ", test_accuracy)
 
-  def predict(self):
-    label_predicted = predict(self.cnn, "./reception/0.jpg", self.device)
-    # print(label_predicted.numpy()[0])
-    return self.ipm.getLabel(label_predicted.numpy()[0])
+  def predict(self, file_path):
+    if self.data_exist:
+      label_predicted = predict(self.cnn, file_path, self.device)
+      os.remove(file_path)
+      return self.ipm.getLabel(label_predicted.numpy()[0])
+    else:
+      os.remove(file_path)
+      return "error"
   
   # 学習
   def train(self, model, loss_fn, opt, train_loader, valid_loader, device, epoch=50):

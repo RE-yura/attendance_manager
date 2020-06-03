@@ -30,7 +30,12 @@ class MainWindow(QMainWindow):
 
   @pyqtSlot(str)
   def setText(self, text):
-    self.result_label.setText('あなたは <span style="color: red">' + text + '</span> ですね?')
+    if text == "error":
+      self.result_label.setText("顔の登録からスタートして下さい．")
+    elif text != "":
+      self.result_label.setText('あなたは <span style="color: red">' + text + '</span> ですね?')
+    else:
+      self.result_label.setText("顔がカメラに上手く映っていません．")
 
   @pyqtSlot(QImage)
   def setImage(self, image):
