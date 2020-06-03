@@ -19,11 +19,10 @@ class CameraThread(QThread):
   # 1 : USBカメラ
   CAMERA_MODE = 0
 
-  def __init__(self):
+  def __init__(self, lthread):
     super().__init__()
-    self.fc = FaceLearner()
-    self.fc.changeProgress.connect(self.setProgress)
-
+    self.lthread = lthread
+    
     self.selfpath = os.path.dirname(os.path.abspath(__file__))
     self.count = 0
     self.name = ''
@@ -47,7 +46,7 @@ class CameraThread(QThread):
     self.takePicture()
     while not os.path.isfile(self.datapath + "0.jpg"):
       QTest.qWait(10)
-    name = self.fc.predict(self.datapath + "0.jpg")
+    name = self.lthread.predict(self.datapath + "0.jpg")
     self.changeLabel.emit(name)
 
   @pyqtSlot(int)
@@ -70,7 +69,7 @@ class CameraThread(QThread):
       print('撮影終了')
 
     if mode != "take":
-      self.fc.start()
+      self.lthread.start()
 
   # 写真を撮影
   def takePicture(self):

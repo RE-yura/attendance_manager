@@ -16,7 +16,9 @@ def data_split(X, y):
   return X_train, X_val, X_test, y_train, y_valid, y_test
 
 class ImgPathManager:
-  def __init__(self): 
+  def __init__(self, func): 
+    self.showPopup = func
+
     self.path_train = np.empty(0)
     self.y_train = np.empty(0)
     self.path_valid = np.empty(0)
@@ -31,15 +33,7 @@ class ImgPathManager:
       if self.category_num == 0:
         raise FileNotFoundError("error!")
     except:
-      # msg_box = QMessageBox()
-      # msg_box.setAttribute(Qt.WA_DeleteOnClose, True)
-      # msg_box.setWindowTitle("Message")
-      # msg_box.setStyleSheet("width: 400px;")
-      # msg_box.setText('顔の登録をして下さい．')
-      # msg_box.setIcon(QMessageBox.Information)
-      # restart_btn = msg_box.addButton("OK", QMessageBox.ActionRole)
-      # msg_box.setDefaultButton(restart_btn)
-      # msg_box.exec_()
+      self.showPopup()
       return
 
     self.idx_to_names = {idx: name for idx, name in zip(range(self.category_num), names)}
@@ -153,6 +147,7 @@ def predict(model, path, device):
 # ==============================================================
 class FaceLearner(QThread):
   changeProgress = pyqtSignal(int)
+  triggerPopup = pyqtSignal()
 
   def __init__(self):
     super().__init__()
@@ -171,10 +166,13 @@ class FaceLearner(QThread):
       # print('catch RuntimeError:', e)
       print("モデルパラメータのロードに失敗しました．再学習を行って下さい．")
       pass
+  
+  def showPopup(self):
+    self.triggerPopup.emit()
 
   def loadData(self):
     batch_size = 4
-    self.ipm = ImgPathManager()
+    self.ipm = ImgPathManager(self.showPopup)
 
     try: 
       self.train_dataset = Dataset(data=self.ipm.getData(phase="train"), transform=ImageTransform())

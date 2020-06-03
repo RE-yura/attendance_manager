@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 
 from camera_thread import CameraThread
-
+from face_learning import FaceLearner
 
 # === メインウィンドウ =================================
 class MainWindow(QMainWindow):
@@ -57,11 +57,23 @@ class MainWindow(QMainWindow):
     else:
       name = self.name_input.text()
       if name == "":
-        QMessageBox.warning(self, "Message", "名前を入力して下さい．")
+        QMessageBox.warning(self, "Warning", "名前を入力して下さい．")
       else:
         self.triggerDataCollection.emit(self.name_input.text(), mode)
-  
 
+  @pyqtSlot()
+  def showPopup(self):
+    QMessageBox.information(self, "Message", "始めに顔の登録をして下さい．")
+    # msg_box = QMessageBox()
+    # msg_box.setAttribute(Qt.WA_DeleteOnClose, True)
+    # msg_box.setWindowTitle("Message")
+    # msg_box.setStyleSheet("width: 400px;")
+    # msg_box.setText('顔の登録をして下さい．')
+    # msg_box.setIcon(QMessageBox.Information)
+    # restart_btn = msg_box.addButton("OK", QMessageBox.ActionRole)
+    # msg_box.setDefaultButton(restart_btn)
+    # msg_box.exec_()
+  
   def initUI(self):
     # === 中央ウィジェットの生成 =======
     centralWidget = QWidget()
@@ -130,6 +142,7 @@ class MainWindow(QMainWindow):
 
     name_label = QLabel("名前を入力して下さい")
     self.name_input = QLineEdit()
+    self.name_input.setStyleSheet("QLineEdit:focus {background: #e9f7f5}")
     form_layout.addRow(name_label, self.name_input)
 
     tab2_btns_layout = QVBoxLayout()
@@ -161,24 +174,29 @@ def main():
 
   window = MainWindow()
   window.setGeometry(200, 200, width*0.8, height*0.8)
-  thread = CameraThread()
+  lthread = FaceLearner()
+  cthread = CameraThread(lthread)
 
-  window.triggerDataCollection.connect(thread.dataCollection)
-  window.triggerReception.connect(thread.reception)
-  thread.changePixmap.connect(window.setImage)
-  thread.changeLabel.connect(window.setText)
-  thread.changeProgress.connect(window.onProgressChanged)
+  window.triggerDataCollection.connect(cthread.dataCollection)
+  window.triggerReception.connect(cthread.reception)
+  cthread.changePixmap.connect(window.setImage)
+  cthread.changeLabel.connect(window.setText)
+  cthread.changeProgress.connect(window.onProgressChanged)
+  lthread.changeProgress.connect(cthread.setProgress)
+  lthread.triggerPopup.connect(window.showPopup)
+  lthread.loadData()
 
   window.show()
-  thread.start()
+  cthread.start()
 
   app.exec_()
 
-  thread.finished()
-  thread.quit()
-  thread.wait()
+  cthread.finished()
+  cthread.quit()
+  cthread.wait()
   sys.exit(0)
 
     
 if __name__ == '__main__':
   main()
+ 
