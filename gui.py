@@ -33,7 +33,7 @@ class MainWindow(QMainWindow):
     if text == "error":
       self.result_label.setText("顔の登録からスタートして下さい．")
     elif text != "":
-      self.result_label.setText('あなたは <span style="color: red">' + text + '</span> ですね?')
+      self.result_label.setText('あなたは <span style="color: red">' + text + '</span> さんですね?')
     else:
       self.result_label.setText("顔がカメラに上手く映っていません．")
 
